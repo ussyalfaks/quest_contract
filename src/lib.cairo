@@ -1,14 +1,13 @@
 pub mod STARKTOKEN;
-pub mod gamemode;
 pub mod quest;
+pub mod gamemode;
 pub mod questNFT;
-pub mod playerprofile;
 pub mod interfaces {
     pub mod ISTARK;
-    pub mod igamemode;
     pub mod iquest;
+    pub mod igamemode;
     pub mod iquestNFT;
-    pub mod iplayerprofile;
+    pub mod iverification;
 }
 pub mod base {
     pub mod types;
