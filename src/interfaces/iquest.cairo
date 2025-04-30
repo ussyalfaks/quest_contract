@@ -1,4 +1,6 @@
-use quest_contract::base::types::{Puzzle, Question, QuestionType, options};
+use quest_contract::base::types::{
+    PlayerAttempt, Puzzle, Question, QuestionType, RewardParameters, options,
+};
 use starknet::ContractAddress;
 // Interface trait
 
@@ -17,7 +19,26 @@ pub trait ILogicQuestPuzzle<TContractState> {
         difficulty_level: u8,
         time_limit: u32,
     ) -> u32;
-
+    fn claim_puzzle_reward(ref self: TContractState, puzzle_id: u32) -> u256;
+    fn get_puzzle(self: @TContractState, puzzle_id: u32) -> Puzzle;
+    fn get_estimated_reward(
+        self: @TContractState, puzzle_id: u32, score: u32, time_taken: u64,
+    ) -> u256;
+    fn get_reward_parameters(self: @TContractState) -> RewardParameters;
+    fn get_player_attempts(
+        self: @TContractState, player: ContractAddress, puzzle_id: u32,
+    ) -> PlayerAttempt;
+    fn has_sufficient_pool(ref self: TContractState, amount: u256) -> bool;
+    fn update_player_attempt(
+        ref self: TContractState,
+        score: u32,
+        player_attempt: PlayerAttempt,
+        time_taken: u64,
+        player: ContractAddress,
+        puzzle_id: u32,
+        reward_amount: u256,
+        current_time: u64,
+    );
     fn add_question(
         ref self: TContractState,
         puzzle_id: u32,
@@ -26,7 +47,24 @@ pub trait ILogicQuestPuzzle<TContractState> {
         difficulty: u8,
         points: u32,
     ) -> u32;
-
+    fn get_reward_pool_balance(self: @TContractState) -> u256;
+    fn get_total_rewards_distributed(self: @TContractState) -> u256;
+    fn is_player_blacklisted(self: @TContractState, player: ContractAddress) -> bool;
+    fn is_contract_paused(self: @TContractState) -> bool;
+    fn fund_reward_pool_balance(ref self: TContractState);
+    fn update_reward_parameters(
+        ref self: TContractState,
+        base_reward: u256,
+        time_bonus_factor: u256,
+        difficulty_multiplier: u256,
+        perfect_score_bonus: u256,
+        max_reward_cap: u256,
+        cooldown_period: u64,
+        reward_decay_factor: u256,
+    );
+    fn blacklist_player(ref self: TContractState, player: ContractAddress, is_blacklisted: bool);
+    fn set_paused(ref self: TContractState, paused: bool);
+    fn emergency_withdraw(ref self: TContractState, amount: u256, recipient: ContractAddress);
     fn add_option(
         ref self: TContractState,
         puzzle_id: u32,
@@ -36,7 +74,6 @@ pub trait ILogicQuestPuzzle<TContractState> {
     ) -> u32;
 
     // // Query functions
-    fn get_puzzle(self: @TContractState, puzzle_id: u32) -> Puzzle;
     fn get_question(self: @TContractState, puzzle_id: u32, question_id: u32) -> Question;
     fn get_option(
         self: @TContractState, puzzle_id: u32, question_id: u32, option_id: u32,

@@ -9,7 +9,7 @@ pub enum QuestionType {
     Scientific: (),
 }
 
-// Option struct for multiple-choice questions
+// Option pub  for multiple-choice questions
 #[derive(Drop, Copy, Serde, starknet::Store)]
 pub struct options {
     pub id: u32,
@@ -42,6 +42,28 @@ pub struct Puzzle {
     pub creator: ContractAddress,
     pub creation_timestamp: u64,
 }
+
+#[derive(Copy, Drop, Serde, starknet::Store)]
+pub struct PlayerAttempt {
+    pub attempt_count: u32,
+    pub last_attempt_timestamp: u64,
+    pub last_reward_amount: u256,
+    pub total_rewards_earned: u256,
+    pub best_score: u32,
+    pub best_time: u64,
+}
+
+#[derive(Copy, Drop, Serde, starknet::Store)]
+pub struct RewardParameters {
+    pub base_reward: u256,
+    pub time_bonus_factor: u256,
+    pub difficulty_multiplier: u256,
+    pub perfect_score_bonus: u256,
+    pub max_reward_cap: u256,
+    pub cooldown_period: u64,
+    pub reward_decay_factor: u256,
+}
+
 
 // GameMode enum to define different game modes
 #[derive(Drop, Copy, Serde, starknet::Store)]
