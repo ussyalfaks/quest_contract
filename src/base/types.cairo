@@ -98,6 +98,44 @@ pub struct UserGameModeProgress {
     pub last_played_timestamp: u64,
 }
 
+// Player Profile struct to represent a player's profile and progress
+#[derive(Drop, Copy,Serde, starknet::Store)]
+pub struct PlayerProfile {
+    pub player_id: u32,
+    pub address: ContractAddress,
+    pub username: felt252,
+    pub level: u32,
+    pub total_score: u32,
+    pub puzzles_solved: u32,
+    pub total_time_spent: u64,
+    pub streak_days: u32,
+    pub last_active_timestamp: u64,
+    pub creation_timestamp: u64,
+}
+
+// Puzzle Statistics for a player
+#[derive(Drop, Serde, starknet::Store)]
+pub struct PuzzleStats {
+    pub puzzle_id: u32,
+    pub player: ContractAddress,
+    pub attempts: u32,
+    pub best_score: u32,
+    pub best_time: u64,
+    pub last_completion_timestamp: u64,
+}
+
+// Level Unlock struct to track level unlocking requirements and status
+#[derive(Drop, Serde, starknet::Store)]
+pub struct LevelUnlock {
+    pub level_id: u32,
+    pub name: felt252,
+    pub description: felt252,
+    pub achievement_requirement: u32, // 0 if no achievement required
+    pub token_requirement: u256,      // 0 if no tokens required
+    pub prerequisite_level: u32,      // 0 if no prerequisite
+    pub creation_timestamp: u64,
+}
+
 // Achievement struct for game mode-specific achievements
 #[derive(Drop, Serde, starknet::Store)]
 pub struct GameModeAchievement {
