@@ -31,6 +31,14 @@ pub mod LogicQuestPuzzle {
     const REWARD_DECAY_FACTOR: u256 =
         800; // 80% decay factor for repeated attempts (divide by 1000)
     const TWO_STARK: u256 = 2_000_000_000_000_000_000;
+    const MODERATOR_ROLE: felt252 = selector!("MODERATOR_ROLE");
+    const CREATOR_SUBMISSION_LIMIT: u32 = 5; // Max pending submissions per creator
+    const SUBMISSION_COOLDOWN: u64 = 86400; // 24 hours between submissions
+    const MINIMUM_RATING_COUNT: u32 = 5; // Minimum ratings to consider average
+    const CREATOR_REWARD_PERCENTAGE: u8 = 20; // 20% of solver rewards go to creator
+    const RATING_WEIGHT_DIFFICULTY: u8 = 30; // Weight for difficulty rating (30%)
+    const RATING_WEIGHT_ENJOYMENT: u8 = 40; // Weight for enjoyment rating (40%)
+    const RATING_WEIGHT_QUALITY: u8 = 30;
 
 
     // components definition
@@ -91,6 +99,15 @@ pub mod LogicQuestPuzzle {
         attempt_count: u32,
         timestamp: u64,
     }
+    #[derive(Copy, Drop, Serde, starknet::Store)]
+    enum PuzzleStatus {
+        Pending: (),
+        Approved: (),
+        Rejected: (),
+        Published: (),
+    }
+
+    
     #[derive(Drop, starknet::Event)]
     struct RewardPaid {
         #[key]
@@ -144,6 +161,31 @@ pub mod LogicQuestPuzzle {
         new_version: u32,
     }
 
+    #[derive(Drop, starknet::Event)]
+struct PuzzleSubmitted {
+    #[key]
+    puzzle_id: u32,
+    creator: ContractAddress,
+    timestamp: u64,
+}
+
+#[derive(Drop, starknet::Event)]
+struct PuzzleApproved {
+    #[key]
+    puzzle_id: u32,
+    moderator: ContractAddress,
+    timestamp: u64,
+}
+
+#[derive(Drop, starknet::Event)]
+struct PuzzleRejected {
+    #[key]
+    puzzle_id: u32,
+    moderator: ContractAddress,
+    reason: felt252,
+    timestamp: u64,
+}
+
 
     // Contract storage
     #[storage]
@@ -169,6 +211,10 @@ pub mod LogicQuestPuzzle {
         // Anti-gaming and security
         blacklisted_players: Map<ContractAddress, bool>,
         paused: bool,
+        pending_puzzles: Map<u32, bool>,
+        rejected_puzzles: Map<u32, bool>,
+        puzzle_rejection_reasons: Map<u32, felt252>,
+        puzzle_submission_limits: Map<ContractAddress, (u32, u64)>,
         #[substorage(v0)]
         pub accesscontrol: AccessControlComponent::Storage,
         #[substorage(v0)]
@@ -660,6 +706,181 @@ pub mod LogicQuestPuzzle {
                         EmergencyWithdrawal { amount, recipient, timestamp: get_block_timestamp() },
                     ),
                 );
+        }
+
+        fn submit_puzzle(
+            ref self: ContractState,
+            title: felt252,
+            description: felt252,
+            difficulty_level: u8,
+            time_limit: u32,
+        ) -> u32 {
+            // No need for authorization - anyone can submit
+            let caller = get_caller_address();
+            
+            // Anti-spam: Check submission limits
+            let (submission_count, last_submission_time) = self.puzzle_submission_limits.read(caller);
+            let current_time = get_block_timestamp();
+            
+            // Rate limit: Max 3 submissions per day
+            if current_time - last_submission_time < 86400 && submission_count >= 3 {
+                panic_with_felt252('Submission limit reached');
+            }
+            
+            // Create puzzle with Pending status
+            let puzzle_id = self.puzzles_count.read() + 1;
+            
+            let new_puzzle = Puzzle {
+                id: puzzle_id,
+                title: title,
+                description: description,
+                version: self.current_contract_version.read(),
+                difficulty_level: difficulty_level,
+                total_points: 0,
+                time_limit: time_limit,
+                creator: caller,
+                creation_timestamp: current_time,
+                status: PuzzleStatus::Pending(()),
+                moderator: contract_address_const::<0>(), // Zero address initially
+                approval_timestamp: 0,
+            };
+            
+            // Store puzzle
+            self.puzzles.write(puzzle_id, new_puzzle);
+            self.puzzles_count.write(puzzle_id);
+            self.questions_count.write(puzzle_id, 0);
+            self.pending_puzzles.write(puzzle_id, true);
+            
+            // Update submission limits
+            self.puzzle_submission_limits.write(
+                caller, 
+                (submission_count + 1, current_time)
+            );
+            
+            // Emit event
+            self.emit(PuzzleSubmitted {
+                puzzle_id,
+                creator: caller,
+                timestamp: current_time,
+            });
+            
+            puzzle_id
+        }
+        
+        // For moderators
+        fn approve_puzzle(ref self: ContractState, puzzle_id: u32) {
+            self.only_authorized(); // Only moderators can approve
+            
+            let puzzle = self.puzzles.read(puzzle_id);
+            assert(puzzle.id == puzzle_id, 'Invalid puzzle ID');
+            
+            // Check if puzzle is pending
+            assert(self.pending_puzzles.read(puzzle_id), 'Puzzle not pending');
+            
+            let caller = get_caller_address();
+            let current_time = get_block_timestamp();
+            
+            // Update puzzle status
+            let mut puzzle = puzzle;
+            puzzle.status = PuzzleStatus::Approved(());
+            puzzle.moderator = caller;
+            puzzle.approval_timestamp = current_time;
+            self.puzzles.write(puzzle_id, puzzle);
+            
+            // Remove from pending list
+            self.pending_puzzles.write(puzzle_id, false);
+            
+            // Emit event
+            self.emit(PuzzleApproved {
+                puzzle_id,
+                moderator: caller,
+                timestamp: current_time,
+            });
+        }
+        
+        fn reject_puzzle(ref self: ContractState, puzzle_id: u32, reason: felt252) {
+            self.only_authorized(); // Only moderators can reject
+            
+            let puzzle = self.puzzles.read(puzzle_id);
+            assert(puzzle.id == puzzle_id, 'Invalid puzzle ID');
+            
+            // Check if puzzle is pending
+            assert(self.pending_puzzles.read(puzzle_id), 'Puzzle not pending');
+            
+            let caller = get_caller_address();
+            let current_time = get_block_timestamp();
+            
+            // Update puzzle status
+            let mut puzzle = puzzle;
+            puzzle.status = PuzzleStatus::Rejected(());
+            puzzle.moderator = caller;
+            self.puzzles.write(puzzle_id, puzzle);
+            
+            // Remove from pending and add to rejected
+            self.pending_puzzles.write(puzzle_id, false);
+            self.rejected_puzzles.write(puzzle_id, true);
+            
+            // Store rejection reason
+            self.puzzle_rejection_reasons.write(puzzle_id, reason);
+            
+            // Emit event
+            self.emit(PuzzleRejected {
+                puzzle_id,
+                moderator: caller,
+                reason,
+                timestamp: current_time,
+            });
+        }
+        
+        // For query
+        fn get_pending_puzzles(self: @ContractState) -> Array<u32> {
+            self.only_authorized(); // Only moderators can view pending puzzles
+            
+            let mut result = ArrayTrait::new();
+            let mut i = 1;
+            let total = self.puzzles_count.read();
+            
+            while i <= total {
+                if self.pending_puzzles.read(i) {
+                    result.append(i);
+                }
+                i += 1;
+            }
+            
+            result
+        }
+        
+        fn get_puzzle_status(self: @ContractState, puzzle_id: u32) -> PuzzleStatus {
+            let puzzle = self.puzzles.read(puzzle_id);
+            puzzle.status
+        }
+        
+        fn get_puzzle_rejection_reason(self: @ContractState, puzzle_id: u32) -> felt252 {
+            assert(self.rejected_puzzles.read(puzzle_id), 'Puzzle not rejected');
+            self.puzzle_rejection_reasons.read(puzzle_id)
+        }
+        
+        // For creators to publish approved puzzles
+        fn publish_puzzle(ref self: ContractState, puzzle_id: u32) {
+            let caller = get_caller_address();
+            let puzzle = self.puzzles.read(puzzle_id);
+            
+            // Only the creator can publish
+            assert(puzzle.creator == caller, 'Not puzzle creator');
+            
+            // Check if puzzle is approved
+            assert(puzzle.status == PuzzleStatus::Approved(()), 'Puzzle not approved');
+            
+            // Check if puzzle has questions
+            assert(self.questions_count.read(puzzle_id) > 0, 'No questions added');
+            
+            // Update status
+            let mut puzzle = puzzle;
+            puzzle.status = PuzzleStatus::Published(());
+            self.puzzles.write(puzzle_id, puzzle);
+            
+            // Fund reward pool for this puzzle
+            self.fund_reward_pool_balance();
         }
     }
 

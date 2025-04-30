@@ -2,16 +2,18 @@
 pub mod SolutionVerification {
     // Imports
     use core::array::ArrayTrait;
-    use core::hash::{LegacyHash, HashStateExTrait};
+    use core::hash::{HashStateExTrait, LegacyHash};
     use core::option::OptionTrait;
     use core::traits::TryInto;
+    use quest_contract::base::types::{PlayerAttempt, Puzzle, Question, QuestionType};
+    use quest_contract::interfaces::iverification::ISolutionVerification;
     use starknet::storage::{
         Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
         StoragePointerWriteAccess,
     };
-    use starknet::{ContractAddress, get_block_timestamp, get_caller_address, get_contract_address, get_tx_info};
-    use quest_contract::base::types::{Puzzle, PlayerAttempt, Question, QuestionType};
-    use quest_contract::interfaces::iverification::ISolutionVerification;
+    use starknet::{
+        ContractAddress, get_block_timestamp, get_caller_address, get_contract_address, get_tx_info,
+    };
 
     // Constants
     const VERIFICATION_VERSION: u32 = 1;
@@ -108,11 +110,9 @@ pub mod SolutionVerification {
         oracle_count: u32,
         verification_threshold: u8, // Minimum number of oracles needed to verify a solution
         max_challenge_validity: u64, // Time in seconds a challenge is valid
-
         // Challenge-response system
         player_challenges: Map<(ContractAddress, u32), Challenge>,
         solution_proofs: Map<(ContractAddress, u32), SolutionProof>,
-
         // Oracle verification tracking
         oracle_verifications: Map<(ContractAddress, u32, ContractAddress), bool>,
         verification_counts: Map<(ContractAddress, u32), u8>,
@@ -120,7 +120,9 @@ pub mod SolutionVerification {
 
     // Constructor
     #[constructor]
-    fn constructor(ref self: ContractState, admin_address: ContractAddress, quest_contract: ContractAddress) {
+    fn constructor(
+        ref self: ContractState, admin_address: ContractAddress, quest_contract: ContractAddress,
+    ) {
         self.admin.write(admin_address);
         self.quest_contract.write(quest_contract);
         self.max_challenge_validity.write(MAX_CHALLENGE_VALIDITY);
@@ -166,9 +168,7 @@ pub mod SolutionVerification {
         }
 
         fn update_verification_config(
-            ref self: ContractState, 
-            max_challenge_validity: u64,
-            verification_threshold: u8
+            ref self: ContractState, max_challenge_validity: u64, verification_threshold: u8,
         ) {
             self.only_admin();
 
@@ -180,10 +180,7 @@ pub mod SolutionVerification {
             self.max_challenge_validity.write(max_challenge_validity);
             self.verification_threshold.write(verification_threshold);
 
-            self.emit(VerificationConfigUpdated { 
-                max_challenge_validity,
-                verification_threshold
-            });
+            self.emit(VerificationConfigUpdated { max_challenge_validity, verification_threshold });
         }
 
         // Player functions
@@ -191,7 +188,8 @@ pub mod SolutionVerification {
             let player = get_caller_address();
             let current_time = get_block_timestamp();
 
-            // Generate a unique challenge hash using player address, puzzle ID, timestamp, and a salt
+            // Generate a unique challenge hash using player address, puzzle ID, timestamp, and a
+            // salt
             let tx_info = get_tx_info().unbox();
             let mut state = LegacyHash::new(CHALLENGE_SALT_BASE);
             state = state.update_with(player);
@@ -202,22 +200,16 @@ pub mod SolutionVerification {
 
             // Store the challenge
             let challenge = Challenge {
-                player,
-                puzzle_id,
-                challenge_hash,
-                timestamp: current_time,
-                used: false
+                player, puzzle_id, challenge_hash, timestamp: current_time, used: false,
             };
 
             self.player_challenges.write((player, puzzle_id), challenge);
 
             // Emit event
-            self.emit(ChallengeCreated { 
-                player,
-                puzzle_id,
-                challenge_hash,
-                timestamp: current_time
-            });
+            self
+                .emit(
+                    ChallengeCreated { player, puzzle_id, challenge_hash, timestamp: current_time },
+                );
 
             challenge_hash
         }
@@ -229,7 +221,7 @@ pub mod SolutionVerification {
             puzzle_id: u32,
             score: u32,
             time_taken: u64,
-            solution_hash: felt252
+            solution_hash: felt252,
         ) -> bool {
             self.only_oracle();
             let oracle = get_caller_address();
@@ -243,13 +235,13 @@ pub mod SolutionVerification {
             assert(!challenge.used, 'Challenge already used');
             assert(
                 current_time <= challenge.timestamp + self.max_challenge_validity.read(),
-                'Challenge expired'
+                'Challenge expired',
             );
 
             // Check if this oracle has already verified this solution
             assert(
                 !self.oracle_verifications.read((player, puzzle_id, oracle)),
-                'Already verified by oracle'
+                'Already verified by oracle',
             );
 
             // Record this oracle's verification
@@ -263,16 +255,17 @@ pub mod SolutionVerification {
             let mut proof = self.solution_proofs.read((player, puzzle_id));
             if proof.challenge_hash == 0 {
                 // First verification for this solution
-                proof = SolutionProof {
-                    player,
-                    puzzle_id,
-                    score,
-                    time_taken,
-                    challenge_hash: challenge.challenge_hash,
-                    solution_hash,
-                    verified: false,
-                    timestamp: current_time
-                };
+                proof =
+                    SolutionProof {
+                        player,
+                        puzzle_id,
+                        score,
+                        time_taken,
+                        challenge_hash: challenge.challenge_hash,
+                        solution_hash,
+                        verified: false,
+                        timestamp: current_time,
+                    };
             }
 
             // Check if we've reached the verification threshold
@@ -286,13 +279,12 @@ pub mod SolutionVerification {
                 proof.verified = true;
 
                 // Emit success event
-                self.emit(SolutionVerified { 
-                    player,
-                    puzzle_id,
-                    score,
-                    time_taken,
-                    timestamp: current_time
-                });
+                self
+                    .emit(
+                        SolutionVerified {
+                            player, puzzle_id, score, time_taken, timestamp: current_time,
+                        },
+                    );
             }
 
             // Save the updated proof
@@ -302,10 +294,7 @@ pub mod SolutionVerification {
         }
 
         fn reject_solution(
-            ref self: ContractState,
-            player: ContractAddress,
-            puzzle_id: u32,
-            reason: felt252
+            ref self: ContractState, player: ContractAddress, puzzle_id: u32, reason: felt252,
         ) {
             self.only_oracle();
             let current_time = get_block_timestamp();
@@ -320,25 +309,26 @@ pub mod SolutionVerification {
             self.player_challenges.write((player, puzzle_id), updated_challenge);
 
             // Emit failure event
-            self.emit(VerificationFailed { 
-                player,
-                puzzle_id,
-                reason,
-                timestamp: current_time
-            });
+            self.emit(VerificationFailed { player, puzzle_id, reason, timestamp: current_time });
         }
 
         // Query functions
-        fn is_solution_verified(self: @ContractState, player: ContractAddress, puzzle_id: u32) -> bool {
+        fn is_solution_verified(
+            self: @ContractState, player: ContractAddress, puzzle_id: u32,
+        ) -> bool {
             let proof = self.solution_proofs.read((player, puzzle_id));
             proof.verified
         }
 
-        fn get_solution_proof(self: @ContractState, player: ContractAddress, puzzle_id: u32) -> SolutionProof {
+        fn get_solution_proof(
+            self: @ContractState, player: ContractAddress, puzzle_id: u32,
+        ) -> SolutionProof {
             self.solution_proofs.read((player, puzzle_id))
         }
 
-        fn get_challenge(self: @ContractState, player: ContractAddress, puzzle_id: u32) -> Challenge {
+        fn get_challenge(
+            self: @ContractState, player: ContractAddress, puzzle_id: u32,
+        ) -> Challenge {
             self.player_challenges.read((player, puzzle_id))
         }
 
@@ -354,7 +344,9 @@ pub mod SolutionVerification {
             self.max_challenge_validity.read()
         }
 
-        fn get_verification_count(self: @ContractState, player: ContractAddress, puzzle_id: u32) -> u8 {
+        fn get_verification_count(
+            self: @ContractState, player: ContractAddress, puzzle_id: u32,
+        ) -> u8 {
             self.verification_counts.read((player, puzzle_id))
         }
     }

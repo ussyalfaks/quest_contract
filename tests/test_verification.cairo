@@ -1,20 +1,23 @@
 #[cfg(test)]
 mod tests {
     use core::array::ArrayTrait;
+    use core::num::traits::Zero;
     use core::option::OptionTrait;
     use core::traits::TryInto;
-    use core::num::traits::Zero;
-    use starknet::testing::{set_caller_address, set_contract_address, set_block_timestamp};
-    use starknet::{ContractAddress, contract_address_const, get_caller_address, get_contract_address};
     use openzeppelin::token::erc20::interface::{
-        IERC20Dispatcher, IERC20DispatcherTrait, IERC20MetadataDispatcher, IERC20MetadataDispatcherTrait,
+        IERC20Dispatcher, IERC20DispatcherTrait, IERC20MetadataDispatcher,
+        IERC20MetadataDispatcherTrait,
+    };
+    use quest_contract::interfaces::iverification::{
+        ISolutionVerificationDispatcher, ISolutionVerificationDispatcherTrait,
     };
     use quest_contract::verification::SolutionVerification;
     use quest_contract::verification::SolutionVerification::{
-        Challenge, SolutionProof, SolutionVerificationImpl
+        Challenge, SolutionProof, SolutionVerificationImpl,
     };
-    use quest_contract::interfaces::iverification::{
-        ISolutionVerificationDispatcher, ISolutionVerificationDispatcherTrait
+    use starknet::testing::{set_block_timestamp, set_caller_address, set_contract_address};
+    use starknet::{
+        ContractAddress, contract_address_const, get_caller_address, get_contract_address,
     };
 
     // Helper function to create contract addresses
@@ -34,11 +37,9 @@ mod tests {
         calldata.append(quest_contract.into());
 
         let (verification_address, _) = starknet::deploy_syscall(
-            SolutionVerification::TEST_CLASS_HASH.try_into().unwrap(),
-            0,
-            calldata.span(),
-            false
-        ).unwrap();
+            SolutionVerification::TEST_CLASS_HASH.try_into().unwrap(), 0, calldata.span(), false,
+        )
+            .unwrap();
 
         (admin, oracle, verification_address)
     }
@@ -51,8 +52,8 @@ mod tests {
         set_caller_address(admin);
 
         // Create dispatcher
-        let verification_dispatcher = ISolutionVerificationDispatcher { 
-            contract_address: verification_address
+        let verification_dispatcher = ISolutionVerificationDispatcher {
+            contract_address: verification_address,
         };
 
         // Add oracle
@@ -71,8 +72,8 @@ mod tests {
         set_caller_address(admin);
 
         // Create dispatcher
-        let verification_dispatcher = ISolutionVerificationDispatcher { 
-            contract_address: verification_address
+        let verification_dispatcher = ISolutionVerificationDispatcher {
+            contract_address: verification_address,
         };
 
         // Add oracle
@@ -96,8 +97,8 @@ mod tests {
         set_caller_address(player);
 
         // Create dispatcher
-        let verification_dispatcher = ISolutionVerificationDispatcher { 
-            contract_address: verification_address
+        let verification_dispatcher = ISolutionVerificationDispatcher {
+            contract_address: verification_address,
         };
 
         // Generate challenge
@@ -124,8 +125,8 @@ mod tests {
         set_caller_address(player);
 
         // Create dispatcher
-        let verification_dispatcher = ISolutionVerificationDispatcher { 
-            contract_address: verification_address
+        let verification_dispatcher = ISolutionVerificationDispatcher {
+            contract_address: verification_address,
         };
 
         // Generate challenge
@@ -137,9 +138,8 @@ mod tests {
 
         // Set caller to oracle to verify solution
         set_caller_address(oracle);
-        let verified = verification_dispatcher.verify_solution(
-            player, puzzle_id, score, time_taken, solution_hash
-        );
+        let verified = verification_dispatcher
+            .verify_solution(player, puzzle_id, score, time_taken, solution_hash);
 
         // Verify solution was verified (with default threshold of 1)
         assert(verified, 'Solution should be verified');
@@ -169,8 +169,8 @@ mod tests {
         set_caller_address(player);
 
         // Create dispatcher
-        let verification_dispatcher = ISolutionVerificationDispatcher { 
-            contract_address: verification_address
+        let verification_dispatcher = ISolutionVerificationDispatcher {
+            contract_address: verification_address,
         };
 
         // Generate challenge
@@ -209,8 +209,8 @@ mod tests {
         set_caller_address(player);
 
         // Create dispatcher
-        let verification_dispatcher = ISolutionVerificationDispatcher { 
-            contract_address: verification_address
+        let verification_dispatcher = ISolutionVerificationDispatcher {
+            contract_address: verification_address,
         };
 
         // Generate challenge
@@ -229,14 +229,12 @@ mod tests {
 
         // Attempt to verify expired challenge should fail
         let mut success = false;
-        match verification_dispatcher.verify_solution(player, puzzle_id, score, time_taken, solution_hash) {
-            Result::Ok(_) => {
-                success = true;
+        match verification_dispatcher
+            .verify_solution(player, puzzle_id, score, time_taken, solution_hash) {
+            Result::Ok(_) => { success = true; },
+            Result::Err(_) => {// Expected to fail
             },
-            Result::Err(_) => {
-                // Expected to fail
-            }
-        };
+        }
 
         assert(!success, 'Should fail with expired challenge');
     }
@@ -255,8 +253,8 @@ mod tests {
         set_caller_address(admin);
 
         // Create dispatcher
-        let verification_dispatcher = ISolutionVerificationDispatcher { 
-            contract_address: verification_address
+        let verification_dispatcher = ISolutionVerificationDispatcher {
+            contract_address: verification_address,
         };
 
         // Add oracles
@@ -272,9 +270,8 @@ mod tests {
 
         // Set caller to first oracle to verify
         set_caller_address(oracle1);
-        let verified1 = verification_dispatcher.verify_solution(
-            player, puzzle_id, score, time_taken, solution_hash
-        );
+        let verified1 = verification_dispatcher
+            .verify_solution(player, puzzle_id, score, time_taken, solution_hash);
 
         // Should not be fully verified yet
         assert(!verified1, 'Should not be verified with only one oracle');
@@ -285,9 +282,8 @@ mod tests {
 
         // Set caller to second oracle to verify
         set_caller_address(oracle2);
-        let verified2 = verification_dispatcher.verify_solution(
-            player, puzzle_id, score, time_taken, solution_hash
-        );
+        let verified2 = verification_dispatcher
+            .verify_solution(player, puzzle_id, score, time_taken, solution_hash);
 
         // Now should be fully verified
         assert(verified2, 'Should be verified with two oracles');
