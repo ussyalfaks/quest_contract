@@ -2,19 +2,34 @@ use quest_contract::base::types::QuestionType;
 use quest_contract::interfaces::iquest::{
     ILogicQuestPuzzleDispatcher, ILogicQuestPuzzleDispatcherTrait,
 };
-use snforge_std::{ContractClassTrait, DeclareResultTrait, declare, start_cheat_caller_address};
-use starknet::ContractAddress;
+use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
+use snforge_std::{
+    ContractClassTrait, DeclareResultTrait, declare, start_cheat_caller_address,
+    stop_cheat_caller_address,
+};
+use starknet::{ContractAddress, contract_address_const};
 
-fn setup() -> (ContractAddress, ContractAddress) {
+
+fn setup() -> (ContractAddress, ContractAddress, ContractAddress, ContractAddress) {
     let admin: ContractAddress = 'Admin'.try_into().unwrap();
+    let owner: ContractAddress = contract_address_const::<'owner'>();
+    let recipient: ContractAddress = contract_address_const::<'recipient'>();
+
+    // Deploy mock ERC20
+    let erc20_class = declare("STARKTOKEN").unwrap().contract_class();
+    let mut calldata = array![admin.into(), owner.into(), 6];
+    let (erc20_address, _) = erc20_class.deploy(@calldata).unwrap();
+
     let contract = declare("LogicQuestPuzzle").unwrap().contract_class();
-    let (contract_address, _) = contract.deploy(@array![admin.into()]).unwrap();
-    (contract_address, admin)
+    let (contract_address, _) = contract
+        .deploy(@array![erc20_address.into(), admin.into()])
+        .unwrap();
+    (contract_address, admin, recipient, erc20_address)
 }
 
 #[test]
 fn test_admin_is_set_correctly() {
-    let (contract_address, expected_admin) = setup();
+    let (contract_address, expected_admin, _, _) = setup();
     let contract = ILogicQuestPuzzleDispatcher { contract_address };
 
     // Check if admin is an authorized creator
@@ -24,7 +39,7 @@ fn test_admin_is_set_correctly() {
 
 #[test]
 fn test_create_puzzle() {
-    let (contract_address, admin) = setup();
+    let (contract_address, admin, recipient, erc20_address) = setup();
     let contract = ILogicQuestPuzzleDispatcher { contract_address };
 
     // Set the caller address to admin for the test
@@ -36,7 +51,15 @@ fn test_create_puzzle() {
     let difficulty_level: u8 = 5;
     let time_limit: u32 = 3600; // 1 hour in seconds
 
+    let erc20 = IERC20Dispatcher{
+        contract_address: erc20_address
+    };
+
+    start_cheat_caller_address(erc20_address, admin);
+    erc20.approve(contract.contract_address, 200_000_000_000_000_000_000_000);
+    stop_cheat_caller_address(erc20_address);
     // Create puzzle
+    start_cheat_caller_address(contract.contract_address, admin);
     let puzzle_id = contract.create_puzzle(title, description, difficulty_level, time_limit);
 
     // Assert puzzle was created correctly
@@ -55,7 +78,7 @@ fn test_create_puzzle() {
 
 #[test]
 fn test_authorize_creator() {
-    let (contract_address, admin) = setup();
+    let (contract_address, admin, _, erc20_address) = setup();
     let contract = ILogicQuestPuzzleDispatcher { contract_address };
 
     start_cheat_caller_address(contract_address, admin);
@@ -77,7 +100,7 @@ fn test_authorize_creator() {
 
 #[test]
 fn test_revoke_creator() {
-    let (contract_address, admin) = setup();
+    let (contract_address, admin, _, _) = setup();
     let contract = ILogicQuestPuzzleDispatcher { contract_address };
 
     start_cheat_caller_address(contract_address, admin);
@@ -100,7 +123,7 @@ fn test_revoke_creator() {
 
 #[test]
 fn test_update_contract_version() {
-    let (contract_address, admin) = setup();
+    let (contract_address, admin, _, _) = setup();
     let contract = ILogicQuestPuzzleDispatcher { contract_address };
 
     start_cheat_caller_address(contract_address, admin);
@@ -120,11 +143,19 @@ fn test_update_contract_version() {
 
 #[test]
 fn test_add_question() {
-    let (contract_address, admin) = setup();
+    let (contract_address, admin, _, erc20_address) = setup();
     let contract = ILogicQuestPuzzleDispatcher { contract_address };
 
-    start_cheat_caller_address(contract_address, admin);
 
+    let erc20 = IERC20Dispatcher{
+        contract_address: erc20_address
+    };
+
+    start_cheat_caller_address(erc20_address, admin);
+    erc20.approve(contract.contract_address, 200_000_000_000_000_000_000_000);
+    stop_cheat_caller_address(erc20_address);
+    // Create puzzle
+    start_cheat_caller_address(contract.contract_address, admin);
     // Create a puzzle first
     let puzzle_id = contract.create_puzzle('Puzzle', 'Description', 5, 3600);
 
@@ -156,11 +187,18 @@ fn test_add_question() {
 
 #[test]
 fn test_add_option() {
-    let (contract_address, admin) = setup();
+    let (contract_address, admin, _,erc20_address) = setup();
     let contract = ILogicQuestPuzzleDispatcher { contract_address };
 
-    start_cheat_caller_address(contract_address, admin);
+    let erc20 = IERC20Dispatcher{
+        contract_address: erc20_address
+    };
 
+    start_cheat_caller_address(erc20_address, admin);
+    erc20.approve(contract.contract_address, 200_000_000_000_000_000_000_000);
+    stop_cheat_caller_address(erc20_address);
+    // Create puzzle
+    start_cheat_caller_address(contract.contract_address, admin);
     // Create a puzzle and add a question
     let puzzle_id = contract.create_puzzle('Puzzle', 'Description', 5, 3600);
     let question_id = contract
@@ -187,11 +225,18 @@ fn test_add_option() {
 
 #[test]
 fn test_multiple_questions_and_options() {
-    let (contract_address, admin) = setup();
+    let (contract_address, admin, _, erc20_address) = setup();
     let contract = ILogicQuestPuzzleDispatcher { contract_address };
 
-    start_cheat_caller_address(contract_address, admin);
+    let erc20 = IERC20Dispatcher{
+        contract_address: erc20_address
+    };
 
+    start_cheat_caller_address(erc20_address, admin);
+    erc20.approve(contract.contract_address, 200_000_000_000_000_000_000_000);
+    stop_cheat_caller_address(erc20_address);
+    // Create puzzle
+    start_cheat_caller_address(contract.contract_address, admin);
     // Create a puzzle
     let puzzle_id = contract.create_puzzle('Complex Puzzle', 'Multiple Q&A', 7, 7200);
 
@@ -226,11 +271,20 @@ fn test_multiple_questions_and_options() {
 
 #[test]
 fn test_get_total_puzzles() {
-    let (contract_address, admin) = setup();
+    let (contract_address, admin, _, erc20_address) = setup();
     let contract = ILogicQuestPuzzleDispatcher { contract_address };
 
-    start_cheat_caller_address(contract_address, admin);
 
+    start_cheat_caller_address(contract_address, admin);
+    let erc20 = IERC20Dispatcher{
+        contract_address: erc20_address
+    };
+
+    start_cheat_caller_address(erc20_address, admin);
+    erc20.approve(contract.contract_address, 200_000_000_000_000_000_000_000);
+    stop_cheat_caller_address(erc20_address);
+    // Create puzzle
+    start_cheat_caller_address(contract.contract_address, admin);
     // Check initial puzzle count
     let initial_count = contract.get_total_puzzles();
     assert(initial_count == 0, 'Should start with 0 puzzles');
@@ -248,7 +302,7 @@ fn test_get_total_puzzles() {
 #[should_panic(expected: ('Not authorized',))]
 #[test]
 fn test_unauthorized_create_puzzle() {
-    let (contract_address, _) = setup();
+    let (contract_address, _, _, _) = setup();
     let contract = ILogicQuestPuzzleDispatcher { contract_address };
 
     // Create unauthorized user
@@ -262,7 +316,7 @@ fn test_unauthorized_create_puzzle() {
 #[should_panic(expected: ('Only admin can call this',))]
 #[test]
 fn test_non_admin_authorize_creator() {
-    let (contract_address, _) = setup();
+    let (contract_address, _, _, _) = setup();
     let contract = ILogicQuestPuzzleDispatcher { contract_address };
 
     // Create non-admin user
@@ -277,7 +331,7 @@ fn test_non_admin_authorize_creator() {
 #[should_panic(expected: ('Difficulty must be 1-10',))]
 #[test]
 fn test_invalid_difficulty() {
-    let (contract_address, admin) = setup();
+    let (contract_address, admin, _, _) = setup();
     let contract = ILogicQuestPuzzleDispatcher { contract_address };
 
     start_cheat_caller_address(contract_address, admin);
@@ -289,7 +343,7 @@ fn test_invalid_difficulty() {
 #[should_panic(expected: ('Version must increase',))]
 #[test]
 fn test_invalid_version_update() {
-    let (contract_address, admin) = setup();
+    let (contract_address, admin, _, _) = setup();
     let contract = ILogicQuestPuzzleDispatcher { contract_address };
 
     start_cheat_caller_address(contract_address, admin);
@@ -301,7 +355,7 @@ fn test_invalid_version_update() {
 #[should_panic(expected: ('Invalid puzzle ID',))]
 #[test]
 fn test_invalid_puzzle_id() {
-    let (contract_address, admin) = setup();
+    let (contract_address, admin, _, _) = setup();
     let contract = ILogicQuestPuzzleDispatcher { contract_address };
 
     start_cheat_caller_address(contract_address, admin);
@@ -313,11 +367,19 @@ fn test_invalid_puzzle_id() {
 #[should_panic(expected: ('Not puzzle creator',))]
 #[test]
 fn test_add_question_not_creator() {
-    let (contract_address, admin) = setup();
+    let (contract_address, admin, _, erc20_address) = setup();
     let contract = ILogicQuestPuzzleDispatcher { contract_address };
 
-    start_cheat_caller_address(contract_address, admin);
 
+    let erc20 = IERC20Dispatcher{
+        contract_address: erc20_address
+    };
+
+    start_cheat_caller_address(erc20_address, admin);
+    erc20.approve(contract.contract_address, 200_000_000_000_000_000_000_000);
+    stop_cheat_caller_address(erc20_address);
+    // Create puzzle
+    start_cheat_caller_address(contract.contract_address, admin);
     // Create a puzzle
     let puzzle_id = contract.create_puzzle('Puzzle', 'Description', 5, 3600);
 
@@ -332,17 +394,26 @@ fn test_add_question_not_creator() {
 
 #[test]
 fn test_creator_can_add_to_own_puzzle() {
-    let (contract_address, admin) = setup();
+    let (contract_address, admin, _, erc20_address) = setup();
     let contract = ILogicQuestPuzzleDispatcher { contract_address };
 
     // Create a new authorized creator
     let creator: ContractAddress = 'Creator'.try_into().unwrap();
 
     start_cheat_caller_address(contract_address, admin);
-    contract.authorize_creator(creator);
+    let erc20 = IERC20Dispatcher{
+        contract_address: erc20_address
+    };
 
+    start_cheat_caller_address(erc20_address, admin);
+    erc20.approve(contract.contract_address, 200_000_000_000_000_000_000_000);
+    stop_cheat_caller_address(erc20_address);
+    // Create puzzle
+    
+    contract.authorize_creator(creator);
+    
     // Switch to creator and create a puzzle
-    start_cheat_caller_address(contract_address, creator);
+    start_cheat_caller_address(contract_address, admin);
     let puzzle_id = contract.create_puzzle('Creator Puzzle', 'Made by creator', 5, 3600);
 
     // Creator should be able to add questions to their puzzle
@@ -355,24 +426,197 @@ fn test_creator_can_add_to_own_puzzle() {
 
 #[test]
 fn test_admin_can_edit_any_puzzle() {
-    let (contract_address, admin) = setup();
+    let (contract_address, admin, _, erc20_address) = setup();
     let contract = ILogicQuestPuzzleDispatcher { contract_address };
 
     // Create and authorize a creator
     let creator: ContractAddress = 'Creator'.try_into().unwrap();
 
+    let erc20 = IERC20Dispatcher{
+        contract_address: erc20_address
+    };
+
+    start_cheat_caller_address(erc20_address, admin);
+    erc20.approve(contract.contract_address, 200_000_000_000_000_000_000_000);
+    stop_cheat_caller_address(erc20_address);
+
     start_cheat_caller_address(contract_address, admin);
+    // Create puzzle
     contract.authorize_creator(creator);
 
     // Creator creates a puzzle
-    start_cheat_caller_address(contract_address, creator);
     let puzzle_id = contract.create_puzzle('Creator Puzzle', 'Made by creator', 5, 3600);
 
     // Admin should be able to add questions to creator's puzzle
-    start_cheat_caller_address(contract_address, admin);
     let question_id = contract
         .add_question(puzzle_id, 'Admin Question', QuestionType::Logical, 5, 10);
+    stop_cheat_caller_address(contract_address);
 
     // Verify question was added
     assert!(question_id == 1, "Admin should be able to add question");
+}
+
+#[test]
+fn test_claim_prize_reward() {
+    let (contract_address, admin, _, erc20_address) = setup();
+    let dispatcher = ILogicQuestPuzzleDispatcher { contract_address };
+
+
+    let erc20 = IERC20Dispatcher{
+        contract_address: erc20_address
+    };
+
+    start_cheat_caller_address(erc20_address, admin);
+    erc20.approve(dispatcher.contract_address, 200_000_000_000_000_000_000_000);
+    stop_cheat_caller_address(erc20_address);
+
+    // Creator creates a puzzle
+    start_cheat_caller_address(contract_address, admin);
+    // Create a puzzle first
+    let puzzle_id = dispatcher.create_puzzle('Puzzle', 'Description', 5, 3600);
+    stop_cheat_caller_address(dispatcher.contract_address);
+    assert(puzzle_id == 1, 'puzzle creation failed');
+
+    dispatcher.claim_puzzle_reward(puzzle_id);
+}
+
+#[should_panic(expected: ('Version must increase',))]
+#[test]
+fn test_invalid_version_update_() {
+    let (contract_address, admin, _, _) = setup();
+    let contract = ILogicQuestPuzzleDispatcher { contract_address };
+
+    start_cheat_caller_address(contract_address, admin);
+
+    // Try to update to same version
+    contract.update_contract_version(1);
+}
+
+#[should_panic(expected: ('Invalid puzzle ID',))]
+#[test]
+fn test_invalid_puzzle_ids() {
+    let (contract_address, admin, _, _) = setup();
+    let contract = ILogicQuestPuzzleDispatcher { contract_address };
+
+    start_cheat_caller_address(contract_address, admin);
+
+    // Try to get non-existent puzzle
+    contract.get_puzzle(9099999);
+}
+
+#[should_panic(expected: ('Not puzzle creator',))]
+#[test]
+fn test_add_question_not_by_creator() {
+    let (contract_address, admin, _, erc20_address) = setup();
+    let contract = ILogicQuestPuzzleDispatcher { contract_address };
+
+
+    let erc20 = IERC20Dispatcher{
+        contract_address: erc20_address
+    };
+
+    start_cheat_caller_address(erc20_address, admin);
+    erc20.approve(contract.contract_address, 200_000_000_000_000_000_000_000);
+    stop_cheat_caller_address(erc20_address);
+    // Create puzzle
+    start_cheat_caller_address(contract.contract_address, admin);
+    // Create a puzzle
+    let puzzle_id = contract.create_puzzle('QUIZ', 'Description', 5, 86000);
+
+    // Switch to another authorized creator
+    let another_creator: ContractAddress = 'Creator'.try_into().unwrap();
+    contract.authorize_creator(another_creator);
+    start_cheat_caller_address(contract_address, another_creator);
+
+    // Try to add question to puzzle created by admin (should fail)
+    contract.add_question(puzzle_id, 'Question', QuestionType::Logical, 5, 10);
+}
+
+#[test]
+fn test_creator_can_add_to_own_puzzle_by_owner() {
+    let (contract_address, owner, _, erc20_address) = setup();
+    let contract = ILogicQuestPuzzleDispatcher { contract_address };
+
+    // Create a new authorized creator
+    let creator: ContractAddress = 'Creator'.try_into().unwrap();
+
+    start_cheat_caller_address(contract_address, owner);
+    let erc20 = IERC20Dispatcher{
+        contract_address: erc20_address
+    };
+
+    start_cheat_caller_address(erc20_address, owner);
+    erc20.approve(contract.contract_address, 200_000_000_000_000_000_000_000);
+    stop_cheat_caller_address(erc20_address);
+    // Create puzzle
+    
+    contract.authorize_creator(creator);
+    
+    // Switch to creator and create a puzzle
+    start_cheat_caller_address(contract_address, owner);
+    let puzzle_id = contract.create_puzzle('Creator Puzzle', 'Made by creator', 5, 3600);
+
+    // Creator should be able to add questions to their puzzle
+    let question_id = contract
+        .add_question(puzzle_id, 'Creator Question', QuestionType::Logical, 5, 10);
+
+    // Verify question was added
+    assert(question_id == 1, 'Question should be added');
+}
+
+#[test]
+fn test_admin_can_edit_any_puzzle_() {
+    let (contract_address, admin, _, erc20_address) = setup();
+    let contract = ILogicQuestPuzzleDispatcher { contract_address };
+
+    // Create and authorize a creator
+    let creator: ContractAddress = 'Creator'.try_into().unwrap();
+
+    let erc20 = IERC20Dispatcher{
+        contract_address: erc20_address
+    };
+
+    start_cheat_caller_address(erc20_address, admin);
+    erc20.approve(contract.contract_address, 200_000_000_000_000_000_000_000);
+    stop_cheat_caller_address(erc20_address);
+
+    start_cheat_caller_address(contract_address, admin);
+    // Create puzzle
+    contract.authorize_creator(creator);
+
+    // Creator creates a puzzle
+    let puzzle_id = contract.create_puzzle('Creator Puzzle', 'Made by creator', 5, 3600);
+
+    // Admin should be able to add questions to creator's puzzle
+    let question_id = contract
+        .add_question(puzzle_id, 'Owner Question', QuestionType::Logical, 5, 10);
+    stop_cheat_caller_address(contract_address);
+
+    // Verify question was added
+    assert!(question_id == 1, "Admin should be able to add question");
+}
+
+#[test]
+#[should_panic(expected: 'Difficulty must be 1-10')]
+fn test_claim_prize_reward_different_values() {
+    let (contract_address, admin, _, erc20_address) = setup();
+    let dispatcher = ILogicQuestPuzzleDispatcher { contract_address };
+
+
+    let erc20 = IERC20Dispatcher{
+        contract_address: erc20_address
+    };
+
+    start_cheat_caller_address(erc20_address, admin);
+    erc20.approve(dispatcher.contract_address, 200_000_000_000_000_000_000_000);
+    stop_cheat_caller_address(erc20_address);
+
+    // Creator creates a puzzle
+    start_cheat_caller_address(contract_address, admin);
+    // Create a puzzle first
+    let puzzle_id = dispatcher.create_puzzle('Puzzle', 'Description', 89, 3600);
+    stop_cheat_caller_address(dispatcher.contract_address);
+    assert(puzzle_id == 1, 'puzzle creation failed');
+
+    dispatcher.claim_puzzle_reward(puzzle_id);
 }
