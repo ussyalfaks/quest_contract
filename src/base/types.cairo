@@ -64,3 +64,48 @@ pub struct RewardParameters {
     pub reward_decay_factor: u256,
 }
 
+
+// GameMode enum to define different game modes
+#[derive(Drop, Copy, Serde, starknet::Store)]
+pub enum GameModeType {
+    #[default]
+    Practice: (),
+    Challenge: (),
+    TimeAttack: (),
+}
+
+// Game Mode struct to represent a game mode configuration
+#[derive(Drop, Serde, starknet::Store)]
+pub struct GameMode {
+    pub id: u32,
+    pub name: felt252,
+    pub mode_type: GameModeType,
+    pub reward_multiplier: u32, // Base 100, e.g., 150 means 1.5x rewards
+    pub time_modifier: u32,     // Percentage modification to time limits (100 = no change)
+    pub points_threshold: u32,  // Minimum points needed for rewards
+    pub enabled: bool,
+    pub creation_timestamp: u64,
+}
+
+// User progress in game modes
+#[derive(Drop, Serde, starknet::Store)]
+pub struct UserGameModeProgress {
+    pub user: ContractAddress,
+    pub mode_id: u32,
+    pub completed_puzzles: u32,
+    pub total_points: u32,
+    pub highest_difficulty_completed: u8,
+    pub last_played_timestamp: u64,
+}
+
+// Achievement struct for game mode-specific achievements
+#[derive(Drop, Serde, starknet::Store)]
+pub struct GameModeAchievement {
+    pub id: u32,
+    pub mode_id: u32,
+    pub name: felt252,
+    pub description: felt252,
+    pub condition_type: u8, // 1=puzzles completed, 2=points earned, 3=difficulty reached
+    pub condition_value: u32,
+    pub reward_points: u32,
+}
