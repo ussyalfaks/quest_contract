@@ -125,6 +125,8 @@ name = "quest_contract"
 version = "0.1.0"
 dependencies = [
  "openzeppelin",
+ "openzeppelin_introspection",
+ "openzeppelin_token",
  "snforge_std",
 ]
 

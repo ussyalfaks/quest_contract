@@ -81,8 +81,8 @@ pub struct GameMode {
     pub name: felt252,
     pub mode_type: GameModeType,
     pub reward_multiplier: u32, // Base 100, e.g., 150 means 1.5x rewards
-    pub time_modifier: u32,     // Percentage modification to time limits (100 = no change)
-    pub points_threshold: u32,  // Minimum points needed for rewards
+    pub time_modifier: u32, // Percentage modification to time limits (100 = no change)
+    pub points_threshold: u32, // Minimum points needed for rewards
     pub enabled: bool,
     pub creation_timestamp: u64,
 }
