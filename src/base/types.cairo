@@ -30,19 +30,20 @@ pub struct Question {
 
 // Puzzle struct to represent a complete puzzle
 #[derive(Drop, Serde, PartialEq, starknet::Store, Clone)]
-pub struct Puzzle {
-    pub id: u32,
-    pub title: felt252,
-    pub description: felt252,
-    pub version: u32,
-    pub difficulty_level: u8,
-    pub total_points: u32,
-    // Time limit in seconds (0 for no limit)
-    pub time_limit: u32,
-    pub creator: ContractAddress,
-    pub creation_timestamp: u64,
+struct Puzzle {
+    id: u32,
+    title: felt252,
+    description: felt252,
+    version: u32,
+    difficulty_level: u8,
+    total_points: u32,
+    time_limit: u32,
+    creator: ContractAddress,
+    creation_timestamp: u64,
+    status: PuzzleStatus, // New field
+    moderator: ContractAddress, // New field for approver
+    approval_timestamp: u64 // New field for approval time
 }
-
 #[derive(Copy, Drop, Serde, starknet::Store)]
 pub struct PlayerAttempt {
     pub attempt_count: u32,
@@ -99,7 +100,7 @@ pub struct UserGameModeProgress {
 }
 
 // Player Profile struct to represent a player's profile and progress
-#[derive(Drop, Copy,Serde, starknet::Store)]
+#[derive(Drop, Copy, Serde, starknet::Store)]
 pub struct PlayerProfile {
     pub player_id: u32,
     pub address: ContractAddress,
@@ -131,8 +132,8 @@ pub struct LevelUnlock {
     pub name: felt252,
     pub description: felt252,
     pub achievement_requirement: u32, // 0 if no achievement required
-    pub token_requirement: u256,      // 0 if no tokens required
-    pub prerequisite_level: u32,      // 0 if no prerequisite
+    pub token_requirement: u256, // 0 if no tokens required
+    pub prerequisite_level: u32, // 0 if no prerequisite
     pub creation_timestamp: u64,
 }
 

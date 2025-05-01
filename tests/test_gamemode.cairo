@@ -314,8 +314,8 @@
 //         100, // Points
 //         5);
 
-//     // 100 base points * 1.25 (mode multiplier) * 1.25 (moderate completion bonus) = 156.25 ≈ 156
-//     assert(adjusted_rewards_moderate == 156, 'Time Attack moderate rewards incorrect');
+//     // 100 base points * 1.25 (mode multiplier) * 1.25 (moderate completion bonus) = 156.25 ≈
+//     156 assert(adjusted_rewards_moderate == 156, 'Time Attack moderate rewards incorrect');
 // }
 
 // #[test]
@@ -415,7 +415,8 @@
 
 //     // Time Attack - very fast
 //     let time_attack_fast = contract.calculate_reward_modifier(3, 100, 50);
-//     assert(time_attack_fast == 187, 'Time Attack fast wrong'); // 100 * 1.25 * 1.5 = 187.5 ≈ 187
+//     assert(time_attack_fast == 187, 'Time Attack fast wrong'); // 100 * 1.25 * 1.5 = 187.5 ≈
+//     187
 
 //     // Time Attack - moderately fast
 //     let time_attack_moderate = contract.calculate_reward_modifier(3, 100, 120);
@@ -427,7 +428,6 @@
 //     let time_attack_slow = contract.calculate_reward_modifier(3, 100, 200);
 //     assert(time_attack_slow == 125, 'Time Attack slow wrong'); // 100 * 1.25 = 125
 // }
-
 
 // #[test]
 // fn test_create_game_mode() {
